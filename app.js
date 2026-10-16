@@ -1,17 +1,45 @@
 (() => {
-  const views = ['discover','humans','world','fun'];
+  const views = ['discover','humans','world','fun','experience'];
   let mounted = false;
-  function route() {
+  let experience = null;
+  let experienceModule = null;
+  let routeRevision = 0;
+  async function route() {
     const hash = location.hash.slice(1);
     if(hash === 'beginning' || hash === 'evidence' || hash === 'main') return;
-    const view = views.includes(hash) ? hash : 'discover';
-    document.querySelectorAll('[data-view]').forEach(el => el.hidden = el.dataset.view !== view);
+    const revision = ++routeRevision;
+    const parts = hash.split('/');
+    const view = views.includes(parts[0]) ? parts[0] : 'discover';
+    const chapter = ['origins','communication','decisions','learning'].includes(parts[1]) ? parts[1] : 'overview';
+    if(view !== 'experience') experience?.deactivate();
+    document.querySelectorAll('#main > [data-view]').forEach(el => el.hidden = el.dataset.view !== view);
+    document.body.classList.toggle('experience-active',view === 'experience');
     document.querySelectorAll('[data-nav]').forEach(el => { if(el.dataset.nav === view) el.setAttribute('aria-current','page'); else el.removeAttribute('aria-current'); });
+    const exploreMenu = document.querySelector('.explore-nav');
+    exploreMenu.open = false;
+    exploreMenu.classList.toggle('is-current',['discover','humans','world'].includes(view));
     if(view === 'fun' && !mounted && window.FirstHumansFun) { window.FirstHumansFun.mount(document.getElementById('fun-container')); mounted = true; }
-    document.title = `First Humans — ${ {discover:'The story of us',humans:'Meet the humans',world:'Their world',fun:'The FUN lab'}[view] }`;
+    document.title = `First Humans — ${ {discover:'The story of us',humans:'Meet the humans',world:'Their world',fun:'The FUN lab',experience:'The human experience'}[view] }`;
     window.scrollTo(0,0);
+    if(view === 'experience') {
+      const container = document.getElementById('experience-container');
+      try {
+        experienceModule ||= import('./experience/index.js');
+        const module = await experienceModule;
+        if(revision !== routeRevision) return;
+        experience ||= module.mountExperience(container);
+        experience.activate(chapter);
+      } catch(error) {
+        if(revision !== routeRevision) return;
+        experienceModule = null;
+        container.innerHTML = '<div class="experience-loading"><h1>A moment to reconnect.</h1><p>The experience could not load. Your original pages are still available.</p><button type="button" id="experience-retry">Try again</button><a href="#discover">Return to Discover →</a></div>';
+        document.getElementById('experience-retry').addEventListener('click',route,{once:true});
+      }
+    }
   }
   window.addEventListener('hashchange',route); route();
+  document.addEventListener('click',event=>{const menu=document.querySelector('.explore-nav');if(menu.open&&!menu.contains(event.target))menu.open=false;});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'){const menu=document.querySelector('.explore-nav');if(menu.open){menu.open=false;menu.querySelector('summary').focus();}}});
   const timeData = [
     ['A familiar face, an older beginning.','Fossils from Jebel Irhoud combine relatively modern faces with longer, lower braincases. The discoveries place early Homo sapiens in North Africa about 315,000 years ago.','https://www.eva.mpg.de/de/press/news/2017/2017-06-07-the-first-of-our-kind/'],
     ['A clue, written in volcanic ash.','Ash above the Omo I fossils provides a minimum age of about 233,000 years, with uncertainty of around 22,000 years. The fossils must be older than the ash that covered them.','https://www.nature.com/articles/s41586-021-04275-8'],
